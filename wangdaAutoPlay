@@ -1,0 +1,98 @@
+'''
+【中移网大学习视频-自动播放-脚本】
+软件用途：解决网大在多开自动暂停的问题，仅限浏览器爬虫功能验证，请好好学习天天向上！
+2021-11-30 UPDATED:
+    1.适配Python3.10版 及 Selenium4版
+    2.完善视频学习完成暂停播放的功能，避免因视频重复循环播放带来的学时倍增
+'''
+
+from selenium import webdriver  # pip3 install selenium
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+import time
+
+# 读取相同文件夹内的url.txt文件，文件里面每一行都是一个完整的网大视频链接，以http开头
+f = open('./urls.txt', 'r', encoding='utf-8')
+urls = f.read().splitlines()
+
+# 通过加载urls.txt文件中的第一行视频地址，由于没有cookie，所以将浏览器引导至登录页面
+study_url1 = urls[0]
+
+# 此处为设置Chrome为后台运行模式，也就是看不到浏览器界面
+option = webdriver.ChromeOptions()
+option.add_experimental_option('excludeSwitches', ['enable-logging'])
+# option.add_argument('--headless') # 设置option
+# option.add_argument('--mute-audio')
+
+s = Service('chromedriver.exe')
+browser = webdriver.Chrome(service=s, options=option)  # 此处为Windows方式
+
+# browser = webdriver.Chrome(executable_path = './chromedriver', chrome_options=option) # Mac环境
+# browser = webdriver.Chrome(executable_path='./chromedriver') # 此处为macOS方式
+
+# 打开第一个视频地址，引导至登陆页面
+browser.get(study_url1)
+
+# 如果网络条件不好，此处的等待时间已经要设置较长，也就是要加载出来登录页面的时间！
+time.sleep(2)
+
+# 登录页面信息的录入
+# 寻找登录页面的用户名输入框id
+elem = browser.find_element(By.ID, "D33username")
+
+# 输入用户名
+elem.send_keys("")
+
+# 寻找登录页面的密码输入框id
+elem = browser.find_element(By.ID, "D33password")
+
+# 输入密码
+elem.send_keys("")
+# 输入回车登陆网站
+elem.send_keys(Keys.RETURN)
+
+# 存取个Cookie，没啥实际作用
+# cookie = browser.get_cookies()
+
+# 等待*秒钟登陆处理时间
+time.sleep(2)
+
+# 网大有3个class，分别是icon-reload-full重新学习、icon-bofang学习中、icon-play-full未学习，所以只要遍历出网页内是否还有“学习中”和“未学习”的class标签就可以判断出来这个页面是否需要继续播放还是暂停了
+
+
+# 把urls.txt文件中其他的视频地址遍历出来，以Tab方式打开
+for i in range(len(urls) - 1):
+    js = 'window.open("' + urls[i + 1] + '");'
+    browser.execute_script(js)
+
+# 记个开始时间
+time_start = time.time()
+
+# 读取chrome所有的标签数据
+handles = browser.window_handles
+
+click_count = 0
+
+# 每个标签开始循环监视视频是否处于暂停状态，如果暂停则点击播放按钮
+while True:
+    for handle in handles:  # 切换窗口（切换到搜狗）
+        try:
+            played_icons = browser.find_elements(By.CLASS_NAME, "icon-play-full")  # 查看网页内有多少个“未开始”视频
+            playing_icons = browser.find_elements(By.CLASS_NAME, "icon-bofang")  # 查看网页内有多少个“学习中”视频
+            numbersOfPlayed = len(played_icons) + len(playing_icons)  # 网页内没有学习完的视频=未开始+学习中
+            if numbersOfPlayed != 0:    # 如果存在未开始和学习中的视频，则循环check播放按钮
+                elem = browser.find_element(By.CLASS_NAME, "vjs-paused")  # 判断播放控件是否出现"vjs-paused"的class，如果出现则代表视频暂停
+                elem.click()  # 点击控件继续播放
+                click_count += 1
+            else:
+                print("done")
+        except:
+            pass
+        time_end = time.time()
+        print("\n程序已运行：", int((time_end - time_start) / 60), "分")
+        print("正在监视页面：", browser.title)
+        print("共计避免暂停", click_count, "次")
+
+        time.sleep(2)  # 每个Tab的停留时间，其实可以更长，一般网大每个视频播放5分钟会暂停一次
+        browser.switch_to.window(handle)
